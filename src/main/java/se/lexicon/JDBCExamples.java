@@ -12,7 +12,7 @@ public class JDBCExamples {
 
     public static void main(String[] args) {
 
-        ex2();
+        ex4();
     }
 
     //get all students data (finAll)
@@ -83,6 +83,98 @@ public class JDBCExamples {
         }
 
         // step 5: Close all the resources
+
+    }
+
+    //Create a student
+    public static void ex3() {
+        Student student = new Student("Test", "Testsson", 22, "test@test.se");
+        String query = "insert into student(first_name, last_name, age, email) values(?, ?, ?, ?)";
+
+        try (
+                Connection connection = MySQLConnection.getConnection();
+                PreparedStatement preparedStatement = connection.prepareStatement(query, PreparedStatement.RETURN_GENERATED_KEYS);
+        ) {
+            preparedStatement.setString(1, student.getFirstName());
+            preparedStatement.setString(2, student.getLastName());
+            preparedStatement.setInt(3, student.getAge());
+            preparedStatement.setString(4, student.getEmail());
+
+            int rowsInserted = preparedStatement.executeUpdate();
+            if (rowsInserted > 0) {
+                System.out.println("Student created successfully!");
+            }
+
+            try (
+                    ResultSet generatedKeys = preparedStatement.getGeneratedKeys();
+
+            ) {
+                if (generatedKeys.next()) {
+                    int generatedStudentId = generatedKeys.getInt(1);
+                    System.out.println("generatedStudentId: " + generatedStudentId);
+                }
+            }
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    //Create a student + assign a course to the student
+    public static void ex4() {
+        Student student = new Student("Test", "Testsson", 22, "test@test.se");
+        String insertQueryForStudent = "insert into student(first_name, last_name, age, email) values(?, ?, ?, ?)";
+        String insertQueryForStudentsCourses = "insert into students_courses(student_id, course_id) values(?, ?)";
+
+        try (
+                Connection connection = MySQLConnection.getConnection();
+                PreparedStatement preparedStatement = connection.prepareStatement(insertQueryForStudent, PreparedStatement.RETURN_GENERATED_KEYS);
+        ) {
+            //setting up a transaction
+            connection.setAutoCommit(false);
+
+            preparedStatement.setString(1, student.getFirstName());
+            preparedStatement.setString(2, student.getLastName());
+            preparedStatement.setInt(3, student.getAge());
+            preparedStatement.setString(4, student.getEmail());
+
+            int rowsInserted = preparedStatement.executeUpdate();
+            if (rowsInserted > 0) {
+                System.out.println("Student created successfully!");
+            } else {
+                connection.rollback();
+                throw new IllegalArgumentException("Insert operation in (Student) table failed.");
+            }
+
+            try (
+                    ResultSet generatedKeys = preparedStatement.getGeneratedKeys();
+
+            ) {
+                if (generatedKeys.next()) {
+                    int generatedStudentId = generatedKeys.getInt(1);
+                    System.out.println("generatedStudentId: " + generatedStudentId);
+
+                    int courseId = 1;
+                    try (
+                            PreparedStatement preparedStatementForStudentsCourses = connection.prepareStatement(insertQueryForStudentsCourses)) {
+                        preparedStatementForStudentsCourses.setInt(1, generatedStudentId);
+                        preparedStatementForStudentsCourses.setInt(2, courseId);
+                        int insertedRows = preparedStatementForStudentsCourses.executeUpdate();
+                        if (insertedRows > 0) {
+                            System.out.println("Student with id " + generatedStudentId + " is assigned to the course with id " + courseId);
+                        } else {
+                            connection.rollback();
+                            throw new IllegalArgumentException("Insert operation in (Students_Courses) table failed.");
+                        }
+                    }
+                }
+            }
+            connection.setAutoCommit(true);
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
 
     }
 
